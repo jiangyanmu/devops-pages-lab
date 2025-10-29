@@ -1,0 +1,50 @@
+name: Update Activity Log
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '0 1 * * *'  # 每天 UTC 01:00（台北時間 09:00），視需求修改
+
+permissions:
+  contents: write
+
+jobs:
+  update-readme:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: python -m pip install requests
+
+      - name: Generate activity and update README
+        env:
+          GITHUB_TOKEN: ${{ secrets.TOKEN }}   # 使用存好的 PAT（要叫 TOKEN）
+          REPO: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          python .github/scripts/generate_activity.py
+
+      - name: Commit and push if changed
+        run: |
+          # configure git to use the PAT for push
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # ensure remote uses token so push will authenticate
+          git remote set-url origin https://x-access-token:${{ secrets.TOKEN }}@github.com/${{ github.repository }}.git
+          git add README.md
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: update activity log (automated)"
+            git push origin HEAD:main
+            echo "PUSHED"
+          else
+            echo "No changes to commit"
+          fi
